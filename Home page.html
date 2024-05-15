@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
+    <link rel="stylesheet" href="home.css">
+</head>
+<body>
+    <header>
+        <h1>TERA VA Solar Monitoring</h1>
+        <nav>
+            <a href="#" onclick="fetchExcelData()">Overview</a>
+            <a onclick="redirectdata()">Inverter data</a>
+            <a onclick="redirect()">Inverter status</a>
+            <a onclick="Add_device()">Add device</a>
+        </nav>
+    </header>     
+    <ul id="clientList">
+        <!-- Client data will be dynamically added here -->
+    </ul>
+
+    <!-- Input for filtering data by name -->
+    <input type="text" id="nameFilterInput" oninput="filterByName()" placeholder="Search by name">
+
+    <!-- Table element where the data will be displayed -->
+    <table id="excel-table" border="1">
+        <!-- Table header -->
+        <thead>
+            <tr>
+                <th>Plant Name</th>
+                <th>Capacity</th>
+                <th>Location</th>
+            </tr>
+        </thead>
+        <!-- Table body -->
+        <tbody>
+            <!-- Table content will be dynamically generated here -->
+        </tbody>
+    </table>
+
+    <!-- JavaScript code -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.4/xlsx.full.min.js"></script>
+    <script src="Client_info.js"></script>
+    <script>
+        // Function to filter data by name
+        function filterByName() {
+            var filterInput = document.getElementById("nameFilterInput").value.toUpperCase(); // Get the input and convert it to uppercase for case-insensitive matching
+            var table = document.getElementById("excel-table");
+            var rows = table.getElementsByTagName("tr");
+
+            for (var i = 1; i < rows.length; i++) { // Start from index 1 to skip the header row
+                var nameCell = rows[i].getElementsByTagName("td")[0]; // Assuming name is in the first column (index 0)
+                var name = nameCell.textContent || nameCell.innerText;
+
+                if (name.toUpperCase().indexOf(filterInput) > -1) {
+                    rows[i].style.display = ""; // Display the row if name matches the filter input
+                } else {
+                    rows[i].style.display = "none"; // Hide the row if name doesn't match the filter input
+                }
+            }
+        }
+
+        // Function to display data in the table
+        function displayClientDataInTable() {
+            // Get the table body element
+            var tableBody = document.getElementById("excel-table").getElementsByTagName("tbody")[0];
+
+            // Clear existing table rows
+            tableBody.innerHTML = "";
+
+            // Use a Set to track unique plant names
+            var displayedPlants = new Set();
+
+            // Loop through clientData and add each unique entry as a table row
+            clientData.forEach(client => {
+                if (!displayedPlants.has(client.plantName)) {
+                    // Add plant name to the set
+                    displayedPlants.add(client.plantName);
+
+                    // Create a new table row
+                    var row = tableBody.insertRow();
+
+                    // Add data cells to the row
+                    row.insertCell().textContent = client.plantName;
+                    row.insertCell().textContent = client.capacity;
+                    row.insertCell().textContent = client.plantAddress;
+                }
+            });
+        }
+
+        // Call the function to display data when the page loads
+        window.onload = displayClientDataInTable;
+
+        function redirect() {
+            window.open("inverter_status.html", "_blank");
+        }
+
+        function Add_device() {
+            window.open("add_plant.html","_blank");
+        }
+        function redirectdata(){
+            window.open("inverter_data.html", "_blank");
+        }
+    </script>
+</body>
+</html>

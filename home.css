@@ -1,0 +1,64 @@
+/* header.css */
+header {
+    background-color: #333; /* Background color of the header */
+    color: #fff; /* Text color */
+    padding: 20px; /* Padding around the content inside the header */
+    text-align: center; /* Align text in the center */
+}
+
+nav {
+    display: flex; /* Display navigation items in a row */
+    justify-content: center; /* Center align navigation items */
+    margin-top: 20px; /* Add some space between header and navigation */
+}
+
+nav a {
+    color: #fff; /* Text color of navigation links */
+    text-decoration: none; /* Remove underline from links */
+    padding: 10px 20px; /* Padding around navigation links */
+    margin: 0 10px; /* Add some space between navigation links */
+}
+
+nav a:hover {
+    background-color: #555; /* Background color of navigation links on hover */
+}
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse; /* Collapse borders into a single border */
+    margin-top: 20px; /* Add some space between the table and other elements */
+}
+
+th, td {
+    padding: 10px; /* Add padding to table cells */
+    text-align: left; /* Align text to the left within cells */
+    border: 1px solid #ddd; /* Add a border to table cells */
+}
+
+th {
+    background-color: #8d86ca; /* Background color of table header */
+    color: #fff; /* Text color of table header */
+}
+
+tbody tr:nth-child(even) {
+    background-color: #d0ced4; /* Alternate row background color */
+}
+
+/* Styles for input and dropdown */
+#nameFilterInput {
+    margin-top: 10px; /* Add some space between the input and the table */
+    padding: 5px; /* Add padding to the input */
+    width: 200px; /* Set a fixed width for the input */
+}
+
+#areaDropdown {
+    padding: 5px; /* Add padding to the dropdown */
+    margin-left: 10px; /* Add some space between the input and the dropdown */
+}
