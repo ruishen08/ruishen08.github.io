@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fusion Solar Monitoring</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>INVERTER STATUS</h1>
+        <nav>
+            <a href="#" onclick="redirect()">Overview</a>
+            <a onclick="redirectdata()">Inverter data</a>
+            <a onclick="//">Inverter status</a>
+            <a onclick="downloadTable()">Download</a>
+        </nav>
+    </header>
+    <div class="container">
+        <div id="response"></div>
+    </div>
+    <script src="Client_info.js"></script>
+    <script>
+        function getClientName(sn) {
+            if (!clientData || clientData.length === 0) {
+                console.log("Client data not available");
+                return "Client data not available";
+            }
+
+            // Find the plant containing the device with the given sn
+            const device = clientData.find(device => device.sn === sn);
+            if (device) {
+                return device.plantName;
+            } else {
+                return "Unknown";
+            }
+        }
+
+        function getDevName(sn) {
+            if (!clientData || clientData.length === 0) {
+                return "Client data not available";
+            }
+
+            // Find the device with the given sn
+            const device = clientData.find(device => device.sn === sn);
+            if (device) {
+                return device.devName;
+            } else {
+                return "Unknown";
+            }
+        }
+
+        function sendRequest() {
+            const apiUrl = "https://sg5.fusionsolar.huawei.com/thirdData/getAlarmList";
+            const beginTime = "1664553600000"; // Assuming this is a fixed start time
+            const endTime = Date.now().toString(); // Get the current timestamp
+            const language = "en_US";
+            const levels = "1,2,3,4";
+            const devTypes = "1,62,63";
+
+            // Define the chunk size
+            const size = 100;
+
+            // Extract sn values from clientData array
+            const snsArray = clientData.map(client => client.sn);
+
+            // Initialize an array to store the sliced chunks
+            const slicedChunks = [];
+
+            // Loop through the snsArray and slice it into chunks of size 'size'
+            for (let i = 0; i < snsArray.length; i += size) {
+                // Slice the snsArray to get a chunk of 'size' elements
+                const chunk = snsArray.slice(i, i + size);
+
+                // Join the chunk into a string separated by commas
+                const chunkString = chunk.join(',');
+
+                // Push the chunk string into the slicedChunks array
+                slicedChunks.push(chunkString);
+            }
+
+            // Array to store promises for each request
+            const requestPromises = [];
+
+            // Loop through slicedChunks and create a request for each chunk
+            slicedChunks.forEach((chunk, index) => {
+                // Create a promise for each fetch request
+                const promise = fetch('http://192.168.0.149:7000', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        sns: chunk,
+                        apiUrl: apiUrl,
+                        beginTime: beginTime,
+                        endTime: endTime,
+                        language: language,
+                        levels: levels,
+                        devTypes: devTypes
+                    })
+                }).then(response => response.json());
+
+                // Push the promise into the array
+                requestPromises.push(promise);
+            });
+
+            // Execute all promises concurrently and handle them when all are resolved
+            Promise.all(requestPromises)
+                .then(responses => {
+                    // Handle responses here
+                    // Check if the data is in the expected format
+                    const isValidResponse = responses.every(response => Array.isArray(response.data));
+                    if (!isValidResponse) {
+                        throw new Error('Invalid response format');
+                    }
+
+                    // Combine all data arrays into one
+                    const combinedData = responses.reduce((acc, curr) => acc.concat(curr.data), []);
+
+                    // Filter and display the data
+                    const filteredData = combinedData.map(item => ({
+                        alarmName: item.alarmName,
+                        esnCode: item.esnCode
+                    }));
+
+                    // Display filtered data in table
+                    const responseContainer = document.getElementById('response');
+                    let tableHtml = '<table border="1">';
+                    tableHtml += '<thead><tr><th>Plant Name</th><th>Inverter Name</th><th>Alarm Status</th></tr></thead>';
+                    tableHtml += '<tbody>';
+                    filteredData.forEach(item => {
+                        const plantName = getClientName(item.esnCode);
+                        const devName = getDevName(item.esnCode);
+                        tableHtml += `<tr><td>${plantName}</td><td>${devName}</td><td>${item.alarmName}</td></tr>`;
+                    });
+                    tableHtml += '</tbody></table>';
+
+                    responseContainer.innerHTML = tableHtml;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error occurred. Check console for details');
+                });
+        }
+        function downloadTable() {
+            // Get the HTML content of the dynamically generated table from response
+            const tableHtml = document.getElementById('response').innerHTML;
+
+            // Create a new workbook
+            const workbook = XLSX.utils.book_new();
+
+            // Convert HTML table to worksheet
+            const worksheet = XLSX.utils.table_to_sheet(document.getElementById('response').querySelector('table'));
+
+            // Apply borders to cells
+            const range = XLSX.utils.decode_range(worksheet['!ref']);
+            for (let R = range.s.r; R <= range.e.r; ++R) {
+                for (let C = range.s.c; C <= range.e.c; ++C) {
+                    const cellAddress = { c: C, r: R };
+                    const cellRef = XLSX.utils.encode_cell(cellAddress);
+                    if (!worksheet[cellRef]) continue; // Skip empty cells
+                    worksheet[cellRef].s = {
+                        border: {
+                            top: { style: 'thin', color: { auto: 1 } },
+                            bottom: { style: 'thin', color: { auto: 1 } },
+                            left: { style: 'thin', color: { auto: 1 } },
+                            right: { style: 'thin', color: { auto: 1 } }
+                        }
+                    };
+                }
+            }
+
+            // Add the worksheet to the workbook
+            XLSX.utils.book_append_sheet(workbook, worksheet, 'Inverter Status');
+
+            // Convert workbook to binary Excel file
+            const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+
+            // Convert array buffer to Blob
+            const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+            // Create a temporary anchor element
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+
+            // Set the file name
+            a.download = 'fusionsolar_inverter_status.xlsx';
+
+            // Append the anchor to the document body and trigger a click event to start the download
+            document.body.appendChild(a);
+            a.click();
+
+            // Remove the temporary anchor
+            document.body.removeChild(a);
+        }
+        
+        function downloadTable() {
+            // Get the HTML content of the dynamically generated table from response1
+            const tableHtml1 = document.getElementById('response1').innerHTML;
+
+            // Create a new workbook
+            const workbook1 = XLSX.utils.book_new();
+
+            // Convert HTML table to worksheet for response1
+            const worksheet1 = XLSX.utils.table_to_sheet(document.getElementById('response1'));
+
+            // Apply borders to cells for response1
+            const range1 = XLSX.utils.decode_range(worksheet1['!ref']);
+            for (let R = range1.s.r; R <= range1.e.r; ++R) {
+                for (let C = range1.s.c; C <= range1.e.c; ++C) {
+                    const cellAddress = { c: C, r: R };
+                    const cellRef = XLSX.utils.encode_cell(cellAddress);
+                    if (!worksheet1[cellRef]) continue; // Skip empty cells
+                    worksheet1[cellRef].s = {
+                        border: {
+                            top: { style: 'thin', color: { auto: 1 } },
+                            bottom: { style: 'thin', color: { auto: 1 } },
+                            left: { style: 'thin', color: { auto: 1 } },
+                            right: { style: 'thin', color: { auto: 1 } }
+                        }
+                    };
+                }
+            }
+
+            // Add the worksheet to the workbook for response1
+            XLSX.utils.book_append_sheet(workbook1, worksheet1, 'Response 1');
+
+            // Convert workbook to binary Excel file for response1
+            const excelBuffer1 = XLSX.write(workbook1, { bookType: 'xlsx', type: 'array' });
+
+            // Convert array buffer to Blob for response1
+            const blob1 = new Blob([excelBuffer1], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+
+            // Create a temporary anchor element for response1
+            const a1 = document.createElement('a');
+            a1.href = URL.createObjectURL(blob1);
+
+            // Set the file name for response1
+            a1.download = 'fusionsolar_inverter_status.xlsx';
+
+            // Append the anchor to the document body and trigger a click event to start the download for response1
+            document.body.appendChild(a1);
+            a1.click();
+
+            // Remove the temporary anchor for response1
+            document.body.removeChild(a1);
+
+            // Repeat the above steps for response2 if needed
+            // You can copy the above code and make necessary modifications for response2
+        }
+
+        function redirectdata(){
+            window.open("inverter_data.html", "_blank");
+        }
+
+        function redirect() {
+            window.open("Home page.html", "_blank");
+        }
+
+        function Add_device() {
+            window.open("add_device.html", "_blank");
+        }
+
+        window.onload = sendRequest;
+    </script>
+</body>
+</html>

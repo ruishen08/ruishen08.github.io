@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device and Inverter Data</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>ADD PLANT</h1>
+        <nav>
+            <a href="#" onclick="redirect()">Overview</a>
+            <a onclick="redirectdata()">Inverter data</a>
+            <a onclick="//">Inverter status</a>
+            <a onclick="downloadTable()">Download</a>
+        </nav>
+    </header>
+    <!-- Button to initiate the process -->
+    <button id="addDeviceButton">Add Device</button>
+    
+    <!-- Button to save combined data (hidden initially) -->
+    <button id="saveDataButton" style="display: none;">Save Data</button>
+
+    <!-- Container for displaying the combined response -->
+    <div id="combinedDataContainer" class="response-section"></div>
+
+    <script>
+        let joinedPlantCodes; // Define the variable in a scope accessible to both functions
+        let deviceData; // Store device data globally
+        let inverterData; // Store inverter data globally
+        let combinedData; // Store combined data globally
+
+        document.getElementById('addDeviceButton').addEventListener('click', addDevice);
+        document.getElementById('saveDataButton').addEventListener('click', saveData);
+
+        function addDevice() {
+            const deviceApiUrl = "https://sg5.fusionsolar.huawei.com/thirdData/stations";
+            const devicePageNo = 1;
+
+            // Fetch Post request to the proxy server for device data
+            fetch('http://192.168.0.149:7000', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    apiUrl: deviceApiUrl,
+                    pageNo: devicePageNo
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok for device data');
+                }
+                return response.json();
+            })
+            .then(responseData => {
+                const dataList = responseData.data.list;
+                const plantCodes = dataList.map(entry => entry.plantCode);
+                joinedPlantCodes = plantCodes.join(','); // Assign the value to the globally scoped variable
+
+                // Filtered data
+                deviceData = dataList.map(entry => ({
+                    plantName: entry.plantName,
+                    plantCode: entry.plantCode,
+                    capacity: entry.capacity,
+                    plantAddress: entry.plantAddress
+                }));
+
+                // Proceed to fetch inverter data after device data is obtained
+                return addInverter();
+            })
+            .then(() => {
+                combineData(); // Combine the data after both requests are complete
+            })
+            .catch(error => { 
+                console.error('Error processing request:', error);
+                alert('Error occurred. Check console for details');
+            });
+        }
+
+        function addInverter() {
+            const inverterApiUrl = "https://sg5.fusionsolar.huawei.com/thirdData/getDevList";
+
+            // Fetch Post request to the proxy server for inverter data
+            return fetch('http://localhost:7000', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    apiUrl: inverterApiUrl,
+                    stationCodes: joinedPlantCodes // Use the globally scoped variable
+                })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok for inverter data');
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.data && Array.isArray(data.data)) {
+                    const filteredData = data.data.filter(item => [1, 62, 63].includes(item.devTypeId))
+                                                .map(item => ({
+                                                    devName: item.devName,
+                                                    devTypeId: item.devTypeId,
+                                                    esnCode: item.esnCode,
+                                                    stationCode: item.stationCode,
+                                                    id: item.id
+                                                }));
+
+                    inverterData = filteredData;
+                } else {
+                    throw new Error('Invalid response format for inverter data');
+                }
+            })
+            .catch(error => {
+                console.error('Error processing second request:', error);
+                alert('Error occurred. Check console for details');
+            });
+        }
+
+        function combineData() {
+            // Combine the data from both requests based on matching plantCode and stationCode
+            combinedData = [];
+            if (!deviceData || !inverterData) {
+                console.error('Device or Inverter data is missing');
+                return;
+            }
+
+            for (let device of deviceData) {
+                for (let inverter of inverterData) {
+                    if (device.plantCode === inverter.stationCode) {
+                        // Rename esnCode to sn and plantAddress to location
+                        const { esnCode, ...rest } = inverter;
+                        combinedData.push({ ...device, ...rest, sn: esnCode });
+                    }
+                }
+            }
+
+            // Display combined data in JSON format
+            const responseContainer = document.getElementById('combinedDataContainer');
+            responseContainer.innerHTML = '<pre>' + JSON.stringify(combinedData, null, 2) + '</pre>';
+
+            // Hide the addDeviceButton and show the saveDataButton after displaying combined data
+            document.getElementById('addDeviceButton').style.display = 'none';
+            document.getElementById('saveDataButton').style.display = 'block';
+        }
+
+        function saveData() {
+            fetch('http://localhost:7000/update-data', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ data: combinedData })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to save data');
+                }
+                return response.text();
+            })
+            .then(result => {
+                alert('Data successfully saved to the server');
+            })
+            .catch(error => {
+                console.error('Error saving data:', error);
+                alert('Data successfully saved to the server');
+            });
+        }
+    </script>
+</body>
+</html>
